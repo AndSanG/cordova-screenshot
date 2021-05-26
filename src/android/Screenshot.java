@@ -9,12 +9,17 @@
 package com.darktalker.cordova.screenshot;
 
 import android.Manifest;
+import android.content.ContentResolver;
+import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.CompressFormat;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Environment;
+import android.provider.MediaStore;
 import android.util.Base64;
 import android.view.TextureView;
 import android.view.View;
@@ -31,9 +36,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 
 
 public class Screenshot extends CordovaPlugin {
+    private static final String IMAGES_FOLDER_NAME = "Pictures" ;
     private CallbackContext mCallbackContext;
     private String mAction;
     private JSONArray mArgs;
@@ -53,7 +60,11 @@ public class Screenshot extends CordovaPlugin {
             Bitmap bitmap = (Bitmap) data;
             if (bitmap != null) {
                 if (mAction.equals("saveScreenshot")) {
-                    saveScreenshot(bitmap, mFormat, mFileName, mQuality);
+                    try {
+                        saveScreenshot(bitmap, mFormat, mFileName, mQuality);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 } else if (mAction.equals("getScreenshotAsURI")) {
                     getScreenshotAsURI(bitmap, mQuality);
                 }
@@ -92,7 +103,27 @@ public class Screenshot extends CordovaPlugin {
         this.cordova.getActivity().sendBroadcast(mediaScanIntent);
     }
 
-    private void saveScreenshot(Bitmap bitmap, String format, String fileName, Integer quality) {
+    private void saveScreenshot(Bitmap bitmap, String format, String fileName, Integer quality) throws IOException {
+        OutputStream fos;
+        //only for sdk 29 or above.
+        if ( Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            Context context=this.cordova.getActivity().getApplicationContext();
+            ContentResolver resolver = context.getContentResolver();
+            ContentValues contentValues = new ContentValues();
+            contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
+            contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/png");
+            contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/" + IMAGES_FOLDER_NAME);
+            Uri imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues);
+            fos = resolver.openOutputStream(imageUri);
+            fos.flush();
+            fos.close();
+            // 28 and below
+        } else {
+            saveScreenshotLegacy(bitmap,format,fileName,quality);
+        }
+    }
+
+    private void saveScreenshotLegacy(Bitmap bitmap, String format, String fileName, Integer quality) {
         try {
             File folder = new File(Environment.getExternalStorageDirectory(), "Pictures");
             if (!folder.exists()) {
@@ -164,7 +195,11 @@ public class Screenshot extends CordovaPlugin {
                 if (mFormat.equals("png") || mFormat.equals("jpg")) {
                     Bitmap bitmap = getBitmap();
                     if (bitmap != null) {
-                        saveScreenshot(bitmap, mFormat, mFileName, mQuality);
+                        try {
+                            saveScreenshot(bitmap, mFormat, mFileName, mQuality);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
                     }
                 } else {
                     mCallbackContext.error("format " + mFormat + " not found");
@@ -188,9 +223,9 @@ public class Screenshot extends CordovaPlugin {
         });
     }
 
-     public void getScreenshotAsURISync() throws JSONException{
+    public void getScreenshotAsURISync() throws JSONException{
         mQuality = (Integer) mArgs.get(0);
-        
+
         Runnable r = new Runnable(){
             @Override
             public void run() {

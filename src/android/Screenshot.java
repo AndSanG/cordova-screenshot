@@ -115,6 +115,7 @@ public class Screenshot extends CordovaPlugin {
             contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/" + IMAGES_FOLDER_NAME);
             Uri imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues);
             fos = resolver.openOutputStream(imageUri);
+            bitmap.compress(Bitmap.CompressFormat.PNG, quality, fos);
             fos.flush();
             fos.close();
             // 28 and below

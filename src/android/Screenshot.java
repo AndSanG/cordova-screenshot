@@ -34,6 +34,7 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -60,11 +61,7 @@ public class Screenshot extends CordovaPlugin {
             Bitmap bitmap = (Bitmap) data;
             if (bitmap != null) {
                 if (mAction.equals("saveScreenshot")) {
-                    try {
-                        saveScreenshot(bitmap, mFormat, mFileName, mQuality);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+                    saveScreenshot(bitmap, mFormat, mFileName, mQuality);
                 } else if (mAction.equals("getScreenshotAsURI")) {
                     getScreenshotAsURI(bitmap, mQuality);
                 }
@@ -103,21 +100,36 @@ public class Screenshot extends CordovaPlugin {
         this.cordova.getActivity().sendBroadcast(mediaScanIntent);
     }
 
-    private void saveScreenshot(Bitmap bitmap, String format, String fileName, Integer quality) throws IOException {
-        OutputStream fos;
+    private void saveScreenshot(Bitmap bitmap, String format, String fileName, Integer quality) {
+
         //only for sdk 29 or above.
         if ( Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            Context context=this.cordova.getActivity().getApplicationContext();
-            ContentResolver resolver = context.getContentResolver();
-            ContentValues contentValues = new ContentValues();
-            contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
-            contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/png");
-            contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/" + IMAGES_FOLDER_NAME);
-            Uri imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues);
-            fos = resolver.openOutputStream(imageUri);
-            bitmap.compress(Bitmap.CompressFormat.PNG, quality, fos);
-            fos.flush();
-            fos.close();
+            try {
+                OutputStream fos;
+                Context context = this.cordova.getActivity().getApplicationContext();
+                ContentResolver resolver = context.getContentResolver();
+                ContentValues contentValues = new ContentValues();
+                contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
+                contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/png");
+                contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/" + IMAGES_FOLDER_NAME);
+                Uri imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues);
+                fos = resolver.openOutputStream(imageUri);
+                bitmap.compress(Bitmap.CompressFormat.PNG, quality, fos);
+
+                JSONObject jsonRes = new JSONObject();
+                jsonRes.put("filePath", imageUri.getPath());
+                PluginResult result = new PluginResult(PluginResult.Status.OK, jsonRes);
+                mCallbackContext.sendPluginResult(result);
+
+                fos.flush();
+                fos.close();
+            } catch (FileNotFoundException e) {
+                mCallbackContext.error(e.getMessage());
+            } catch (IOException e) {
+                mCallbackContext.error(e.getMessage());
+            } catch (JSONException e) {
+                mCallbackContext.error(e.getMessage());
+            }
             // 28 and below
         } else {
             saveScreenshotLegacy(bitmap,format,fileName,quality);
@@ -196,11 +208,7 @@ public class Screenshot extends CordovaPlugin {
                 if (mFormat.equals("png") || mFormat.equals("jpg")) {
                     Bitmap bitmap = getBitmap();
                     if (bitmap != null) {
-                        try {
-                            saveScreenshot(bitmap, mFormat, mFileName, mQuality);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
+                        saveScreenshot(bitmap, mFormat, mFileName, mQuality);
                     }
                 } else {
                     mCallbackContext.error("format " + mFormat + " not found");
